@@ -1,10 +1,15 @@
 # AZiL Video İndirici
 
-Windows için yt-dlp tabanlı hafif başlangıç sürümü. Gerçek Windows EXE henüz derlenmedi ve uçtan uca indirme testi tamamlanmadı.
+Windows için video indirme uygulaması. Program, kaynak ZIP üzerinden Python ortamında çalıştırılabilir.
 
-## İndir
+## İndirme
 
-- [Çalıştırma ZIP (Python 3.10+)](downloads/AZiL_Video_Indirici_Calistir.zip): `app.py`, `BASLAT.bat`, bağımlılıklar ve kullanım notları.
-- [Küçük EXE hazırlama ZIP](downloads/AZiL_Video_Indirici_Hazirlama.zip): `EXE_OLUSTUR.bat` ve talimatlar. Önce çalıştırma ZIP'ini açın, sonra bu paketi **aynı klasöre** açıp Windows üzerinde derleme betiğini çalıştırın.
+- **[AZiL Video İndirici v1 — orijinal kaynak paketi](AZiL_Video_Indirici_v1.zip)** (`AZiL_Video_Indirici_v1.zip`): `app.py`, `setup_app.py`, `BASLAT.bat`, `GUNCELLE.bat` ve kullanım notları.
+- [Alternatif hafif prototip](downloads/AZiL_Video_Indirici_Calistir.zip): Ayrı hazırlanmış Python uygulama paketi; orijinal v1 ile birebir aynı değildir.
+- [Prototip EXE hazırlama paketi](downloads/AZiL_Video_Indirici_Hazirlama.zip): Prototip için derleme betikleri.
 
-Bu sürüm daha önceki `AZiL_Video_Indirici_v1.zip` dosyasının birebir aynısı değil; yeniden hazırlanmış bir prototiptir. Python 3.10+ ve ilk kurulumda internet erişimi gerekir. PyInstaller/yt-dlp bağımlılıkları kurulabilir. Yalnızca indirmeye yetkili olduğunuz içerikler için kullanın.
+**Gereksinim:** Windows, Python 3.10+ ve ilk kurulumda internet erişimi. Orijinal paketi tamamen açın, içindeki kullanım notlarını okuyup `BASLAT.bat` ile başlayın.
+
+**Yayın durumu:** Bu depoda henüz resmî GitHub Release ve derlenmiş, test edilmiş bir EXE bulunmuyor. ZIP dosyalarının varlığı Windows'ta tüm işlevlerin doğrulandığı anlamına gelmez.
+
+Yalnızca indirmeye yetkili olduğunuz içerikleri ilgili platformun kullanım koşulları ve hak sahiplerinin izinlerine uygun biçimde indirin.
