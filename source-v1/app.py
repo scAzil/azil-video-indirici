@@ -484,6 +484,30 @@ def self_test(report):
             if checked.returncode != 0:
                 raise RuntimeError(name + ' failed: ' + checked.stdout[-1000:])
         result['yt_dlp'] = yt_dlp.version.__version__
+        # Exercise the real phone-status transcoding path without a network video.
+        import tempfile
+        with tempfile.TemporaryDirectory() as temporary:
+            sample = Path(temporary) / 'sample.avi'
+            generated = subprocess.run(
+                [str(ffmpeg), '-hide_banner', '-loglevel', 'error',
+                 '-f', 'lavfi', '-i', 'color=c=blue:s=160x90:r=10',
+                 '-frames:v', '4', '-c:v', 'mpeg4', '-y', str(sample)],
+                capture_output=True, text=True, timeout=30, creationflags=FLAGS)
+            if generated.returncode != 0 or not sample.is_file():
+                raise RuntimeError('Synthetic input failed: ' + generated.stderr[-1200:])
+            status_file = status_output_path(sample)
+            transcoded = subprocess.run(status_ffmpeg_args(ffmpeg, sample, status_file),
+                                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                        text=True, timeout=120, creationflags=FLAGS)
+            if transcoded.returncode != 0 or not status_file.is_file():
+                raise RuntimeError('9:16 MP4 conversion failed: ' + transcoded.stdout[-1500:])
+            inspected = subprocess.run(
+                [str(ffmpeg), '-hide_banner', '-i', str(status_file)],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                timeout=20, creationflags=FLAGS)
+            if '1080x1920' not in inspected.stdout or 'h264' not in inspected.stdout.lower():
+                raise RuntimeError('Unexpected status export: ' + inspected.stdout[-1500:])
+            result['status_export'] = '1080x1920 H.264 MP4 OK'
         result['ok'] = True
         code = 0
     except Exception as exc:
