@@ -3,6 +3,8 @@ import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
+import subprocess
+import sys
 
 APP_PATH = Path(__file__).resolve().parents[1] / 'source-v1' / 'app.py'
 spec = importlib.util.spec_from_file_location('azil_app', APP_PATH)
@@ -46,6 +48,14 @@ class VideoDownloaderTests(unittest.TestCase):
             self.assertEqual(app.recover_downloaded_file(str(real), folder), real)
             self.assertIsNone(app.recover_downloaded_file(None, folder, 'https://youtu.be/fail12345'))
             self.assertEqual(app.utf8_subprocess_env()['PYTHONIOENCODING'], 'utf-8:replace')
+
+    def test_utf8_subprocess_with_turkish_title(self):
+        sample = 'satın aldığım koltuğa başkası oturdu [BdSgGtHHFNw].mkv'
+        result = subprocess.run([sys.executable, '-c', 'import sys; print(sys.argv[1])', sample],
+                                capture_output=True, text=True, encoding='utf-8',
+                                errors='strict', env=app.utf8_subprocess_env(), timeout=15)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), sample)
 
     def test_ejs_and_utf8_flags(self):
         args = app.command('https://www.youtube.com/shorts/BdSgGtHHFNw',
