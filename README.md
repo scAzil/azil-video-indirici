@@ -1,31 +1,33 @@
 # AZiL Video İndirici
 
-Windows için video indirme uygulaması. Program, kaynak ZIP üzerinden Python ortamında çalıştırılabilir.
+**Windows 10/11 (64-bit) için kurulumsuz video indirici.** YouTube ve X bağlantıları, MP3 seçeneği, indirme yüzdesi ve telefon durumu için 9:16 MP4 dönüştürme.
 
-## İndirme
+## Resmî sürüm — v1.0.0
 
-- **[AZiL Video İndirici v1 — orijinal kaynak paketi](AZiL_Video_Indirici_v1.zip)** (`AZiL_Video_Indirici_v1.zip`): `app.py`, `setup_app.py`, `BASLAT.bat`, `GUNCELLE.bat` ve kullanım notları.
-- [Alternatif hafif prototip](downloads/AZiL_Video_Indirici_Calistir.zip): Ayrı hazırlanmış Python uygulama paketi; orijinal v1 ile birebir aynı değildir.
-- [Prototip EXE hazırlama paketi](downloads/AZiL_Video_Indirici_Hazirlama.zip): Prototip için derleme betikleri.
+**[GitHub Releases — AZiL Video İndirici v1.0.0](https://github.com/scAzil/azil-video-indirici/releases/tag/v1.0.0)**
 
-**Gereksinim:** Windows, Python 3.10+ ve ilk kurulumda internet erişimi. Orijinal paketi tamamen açın, içindeki kullanım notlarını okuyup `BASLAT.bat` ile başlayın.
+- **[Windows EXE'yi doğrudan indir](https://github.com/scAzil/azil-video-indirici/releases/download/v1.0.0/AZiL_Video_Indirici.exe)** — Windows 10/11 x64, yaklaşık 107 MB.
+- **[Taşınabilir ZIP'i indir](https://github.com/scAzil/azil-video-indirici/releases/download/v1.0.0/AZiL_Video_Indirici_v1.0.0_Windows_x64.zip)** — aynı EXE'yi içerir, kurulum gerektirmez.
+- [SHA-256 değerleri](https://github.com/scAzil/azil-video-indirici/releases/download/v1.0.0/SHA256SUMS.txt) ve [yayın kaynak/test kaydı](https://github.com/scAzil/azil-video-indirici/releases/download/v1.0.0/BUILD_PROVENANCE.txt).
 
-## Geliştirilmekte olan Windows EXE — 9:16 telefon durumu ve yüzde göstergesi
+**Python kurmak veya GUNCELLE.bat çalıştırmak gerekmez.** İndirilen EXE'yi açın veya ZIP'i bir klasöre çıkarıp içindeki EXE'yi çalıştırın. Dijital kod imzası henüz bulunmadığından Windows güvenlik uyarılarını değerlendirerek ilerleyin.
 
-Windows EXE aday sürümü GitHub **Actions** sayfasında `Build Windows x64 (candidate)` iş akışının başarılı çalışmasının altındaki **Artifacts** bölümünde bulunur. Resmî GitHub Release yayımlanana kadar bunlar test adaylarıdır.
+## Özellikler
 
-- **İndirme yüzdesi:** İlerleme çubuğu, sayısal yüzde, kuyrukta her işin yüzdesi, hız ve kalan süre. yt-dlp ses/video parçalarını ayrı indirebildiği için yüzde her parçanın ilerlemesidir.
-- **Telefon Durumu (9:16 MP4):** Video seçeneği yanında kutucuğu işaretle; YouTube Shorts veya başka bir desteklenen videoyu indirir, ardından **1080 × 1920, MP4, H.264, AAC, 30 fps** biçiminde ikinci bir dosya oluşturur. Çıktı adının sonuna `- Durum 9x16.mp4` eklenir.
-- **Aynı, denenmiş indirme yöntemi:** Telefon Durumu modu da normal moddaki aynı yt-dlp kalite seçimini kullanır. Farklı filtreler yüzünden indirme hatası yaşanmasın diye yalnızca indirme tamamlandıktan sonra MP4 dönüşümü yapılır.
-- **Dosyadan 9:16 MP4:** Bilgisayarda zaten bulunan MP4/MKV/WebM gibi videolar, yeniden indirilmeden `Dosyadan 9:16 MP4` düğmesinden kuyruğa alınır. `İndirmeyi başlat` işlemi yerel dönüşümü çalıştırır.
-- **Hata raporu:** `Son hata ayrıntısını kopyala` düğmesi başarısız indirme veya dönüşümün son çıktı satırlarını panoya kopyalar. Paylaşmadan önce adres veya kişisel bilgi içerip içermediğini kontrol edin.
-- **Türkçe dosya adları:** Windows UTF-8 kodlaması zorlanır; bozulmuş çıktı satırlarında video kimliğinden güvenli yol kurtarma uygulanır.
-- **YouTube EJS:** EXE içinde resmi yt-dlp-ejs ve Deno bulunur; gerekirse yt-dlp resmi GitHub kaynağından ek EJS bileşenlerini indirebilir.
-- **Kaynak video korunur:** İndirilen özgün dosya asla dönüşüm sırasında silinmez. Yalnızca başarısız dönüşümün yarım kalan çıktısı temizlenir.
-- **Kuyruk kontrolü:** Aynı URL ikinci kez eklenmez. Başarısız işler yeniden sıraya alınabilir.
-- **Kırpma davranışı:** Tam 9:16 çerçeveyi doldurmak için merkezden kırpar; 9:16 olmayan görüntülerin üst/alt veya sağ/sol bölümleri kesilebilir. Videonun kendi içine işlenmiş siyah kenarlar otomatik algılanmaz.
-- **Kullanım:** Programı ayrı bir klasöre çıkar, EXE'yi çalıştır, kaydetme klasörünü belirle, bağlantıyı yapıştır, isteğe bağlı `Telefon Durumu (9:16 MP4)` kutucuğunu aç, `Kuyruğa ekle` ve `İndirmeyi başlat` düğmelerini kullan.
+- YouTube ve X bağlantılarını kuyruğa ekleme, video kalitesi seçimi ve MP3 indirme
+- Sayısal yüzde, ilerleme çubuğu, indirme hızı ve kalan süre
+- **Telefon Durumu (9:16 MP4):** Normal indirme bittikten sonra 1080×1920 H.264/AAC MP4 oluşturur; kaynak videoyu silmez
+- **Dosyadan 9:16 MP4:** Bilgisayardaki bir videoyu yeniden indirmeden telefon paylaşımı için dönüştürür
+- Türkçe karakterli başlıklarda UTF-8 dosya adı desteği ve dosya kimliğiyle kurtarma
+- yt-dlp-ejs, Deno ve FFmpeg bileşenleri; hata kaydını kopyalama ve başarısız işleri yeniden deneme
 
-**Yayın durumu:** Windows için GitHub Actions test adayları mevcuttur ancak resmî GitHub Release hâlâ yoktur. Otomatik derleme testleri gerçek hizmetlerden yapılan indirme ve telefon uygulamasında görüntüleme testinin yerini tutmaz.
+Durum videoları 9:16 çerçeveyi doldurmak için ortadan kırpılabilir; kaynak görüntünün içine gömülü siyah kenarlar her zaman kaldırılamayabilir.
 
-Yalnızca indirmeye yetkili olduğunuz içerikleri ilgili platformun kullanım koşulları ve hak sahiplerinin izinlerine uygun biçimde indirin.
+## Orijinal kaynak ve eski prototipler
+
+- **[Orijinal v1 Python ZIP](AZiL_Video_Indirici_v1.zip):** `app.py`, `setup_app.py`, `BASLAT.bat`, `GUNCELLE.bat` ve kullanım notları. Bu eski yöntem için Windows, Python 3.10+ ve ilk kurulumda internet gerekir.
+- **[Geliştirilmiş Python kaynak kodu](source-v1/app.py)** ve [Windows derleme iş akışı](.github/workflows/windows-build.yml).
+- [Eski hafif prototip](downloads/AZiL_Video_Indirici_Calistir.zip) — resmî EXE ile aynı sürüm değildir.
+- [Eski prototip derleme araçları](downloads/AZiL_Video_Indirici_Hazirlama.zip).
+
+**Lisans ve kullanım:** [Üçüncü taraf bileşen notlarını](THIRD_PARTY_NOTICES.md) inceleyin. Yalnızca indirme ve paylaşma yetkiniz bulunan içerikleri ilgili platform koşullarına ve telif haklarına uygun biçimde kullanın.
