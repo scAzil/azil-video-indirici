@@ -352,22 +352,33 @@ class App:
         code = 1
         downloaded = None
         output = None
+        errors = []
         try:
-            args = command(job['url'], self.active_folder, job['quality'], job['audio'], self.ffmpeg, self.deno, job.get('status_mode', False))
-            with self.lock:
-                if self.cancel_event.is_set():
-                    self.events.put(('done', iid, 'Durduruldu'))
-                    return
-                self.proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                                             encoding='utf-8', errors='replace', creationflags=FLAGS)
-                proc = self.proc
-            for line in proc.stdout:
-                line = line.rstrip()
-                if line.startswith('AZIL_FILE:'):
-                    downloaded = Path(line[len('AZIL_FILE:'):])
-                self.events.put(('line', iid, line))
-            proc.stdout.close()
-            code = proc.wait()
+            if job.get('source_file'):
+                # Convert local video directly without re-downloading.
+                downloaded = Path(job['source_file'])
+                code = 0
+            else:
+                args = command(job['url'], self.active_folder, job['quality'], job['audio'],
+                               self.ffmpeg, self.deno)
+                with self.lock:
+                    if self.cancel_event.is_set():
+                        self.events.put(('done', iid, 'Durduruldu'))
+                        return
+                    self.proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                                                 encoding='utf-8', errors='replace', creationflags=FLAGS)
+                    proc = self.proc
+                for line in proc.stdout:
+                    line = line.rstrip()
+                    if line.startswith('AZIL_FILE:'):
+                        downloaded = Path(line[len('AZIL_FILE:'):])
+                    if line:
+                        errors.append(line)
+                        if len(errors) > 25:
+                            errors.pop(0)
+                    self.events.put(('line', iid, line))
+                proc.stdout.close()
+                code = proc.wait()
             if code == 0 and job.get('status_mode') and not self.cancel_event.is_set():
                 if not downloaded or not downloaded.is_file():
                     raise RuntimeError('İndirilen kaynak video bulunamadı; 9:16 dönüştürme yapılamadı.')
