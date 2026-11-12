@@ -344,7 +344,12 @@ class App:
                     return
         self.busy = False
         self.start_button.state(['!disabled'])
-        self.status.set('Durduruldu. Bekleyenler için yeniden başlatabilirsiniz.' if self.cancel_event.is_set() else 'Kuyruk tamamlandı. Sonuçları durum sütunundan kontrol edin.')
+        if self.cancel_event.is_set():
+            self.status.set('İşlem durduruldu. Bekleyen işler için tekrar başlatabilirsiniz.')
+        elif any(job['state'] == 'Hata' for job in self.jobs.values()):
+            self.status.set('Bazı işlemler başarısız oldu. Son hata ayrıntısını kopyala düğmesini kullanın.')
+        else:
+            self.status.set('Kuyruk tamamlandı. Sonuçları durum sütunundan kontrol edin.')
         if self.closing:
             self.root.destroy()
 
@@ -396,6 +401,10 @@ class App:
                 duration = None
                 for line in transcode.stdout:
                     line = line.rstrip()
+                    if line:
+                        errors.append(line)
+                        if len(errors) > 25:
+                            errors.pop(0)
                     if 'Duration:' in line:
                         match = re.search(r'Duration:\s*(\d+:\d+:\d+(?:\.\d+)?)', line)
                         if match:
@@ -417,6 +426,7 @@ class App:
                     self.events.put(('line', iid, 'Hata: 9:16 MP4 dönüştürme tamamlanamadı; orijinal video korundu.'))
         except Exception as exc:
             code = 1
+            errors.append('Hata: ' + str(exc))
             self.events.put(('line', iid, 'Hata: ' + str(exc)))
         finally:
             with self.lock:
@@ -426,6 +436,8 @@ class App:
                     output.unlink()  # Only incomplete derived MP4; original remains intact.
                 except OSError:
                     pass
+        if code != 0 and not self.cancel_event.is_set():
+            self.events.put(('failure', iid, '\n'.join(errors[-12:]) or 'İşlem başarısız. Hata ayrıntısı yok.'))
         self.events.put(('done', iid, 'Durduruldu' if self.cancel_event.is_set() else ('Tamamlandı' if code == 0 else 'Hata')))
 
     def stop(self):
@@ -449,7 +461,14 @@ class App:
                 kind, iid, value = self.events.get_nowait()
                 if iid not in self.jobs:
                     continue
-                if kind == 'done':
+                if kind == 'failure':
+                    self.last_error = value
+                    self.jobs[iid]['error'] = value
+                    self.log.configure(state='normal')
+                    self.log.insert('end', 'AZİL HATA AYRINTISI:\n' + value + '\n')
+                    self.log.see('end')
+                    self.log.configure(state='disabled')
+                elif kind == 'done':
                     self.jobs[iid]['state'] = value
                     self.tree.set(iid, 'status', value)
                     if value == 'Tamamlandı':
