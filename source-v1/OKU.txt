@@ -1,0 +1,69 @@
+AZiL VIDEO İNDİRİCİ 1.0 — Windows 10/11, 64-bit
+
+BAŞLANGIÇ
+1. ZIP dosyasına sağ tıklayın > Tümünü ayıkla. ZIP içinden çalıştırmayın.
+2. Çıkardığınız klasörde BASLAT.bat dosyasına çift tıklayın.
+3. İlk çalıştırmada gerekli bileşenler internetten indirilir. Birkaç dakika sürebilir.
+4. Uygulama açılınca YouTube veya X video bağlantısını yapıştırın.
+5. Kaliteyi veya Yalnızca ses (MP3) seçeneğini belirleyip Kuyruğa ekle'ye basın.
+6. İndirmeyi başlat'a basın. Tamamlanan satıra çift tıklayarak dosyayı açabilirsiniz.
+
+GEREKSİNİM
+Bilgisayarınızda Python 3.10 veya daha yeni 64-bit sürüm gerekir.
+Python 3.11 kurulumunuz uygundur. Python yoksa:
+https://www.python.org/downloads/windows/
+Kurulumda pip, Tcl/Tk ve Python launcher bileşenlerini seçin.
+Uygulama yönetici izni gerektirmez. Yazılabilir bir klasöre çıkarın.
+
+ÖZELLİKLER VE DAVRANIŞ
+- YouTube / Shorts ve X / Twitter bağlantıları.
+- Bir satıra bir bağlantı ile kuyruk. Bir hata diğer indirmeleri durdurmaz.
+- Kalite seçimi üst sınırdır: örneğin 1080p seçildiğinde mevcut en iyi <=1080p.
+- En iyi seçimi, kaynağın sunduğu en yüksek kaliteyi ister.
+- Görüntü ve ses ayrı gelirse MKV olarak birleştirilir; tek akışta kaynak biçimi korunur.
+  Her video MP4 değildir. MKV destekleyen bir oynatıcı gerekebilir.
+- MP3 seçimi sesi 192 kbps hedefiyle dönüştürür; kaynak sesin kalitesini yükseltmez.
+- Kalite/ses tercihi her satır için kuyruğa ekleme anında alınır.
+- Kayıt klasörü İndirmeyi başlat'a basıldığı anda bütün o çalışma için alınır.
+- Durdur, etkin işi ve varsa dönüştürücü alt süreçlerini durdurur. Diğer satırlar bekler.
+- Durdurulan/hatalı satırları yeniden sıraya alıp başlatabilirsiniz.
+- Kısmi dosyalar tutulur; kaynak destekliyorsa yeniden denemede devam edebilir.
+- Mevcut tamamlanmış dosyaların üzerine yazılmaz. Aynı video için farklı kalite
+  indirecekseniz başka klasör seçin veya önceki dosyanın adını değiştirin.
+- Video oynatma listeleri toplu indirilmez. X gönderisi birden çok video içeriyorsa
+  kaynak tarafından döndürülen birden çok dosya indirilebilir; satır son dosyayı açar.
+- Kuyruk bu sürümde oturumluk; uygulama kapatılınca saklanmaz. Kayıt klasörü saklanır.
+- İlerleme görüntü ve ses aşamaları arasında sıfırlanabilir. %100 sonrasında
+  birleştirme/dönüştürme bitebilir; esas sonuç satırdaki Tamamlandı durumudur.
+- Reklam, analitik veya uygulama sunucusu yoktur. İndirmeler doğrudan kaynakla iletişim kurar.
+
+GÜNCELLEME / SORUNLAR
+Uygulamayı kapatıp GUNCELLE.bat çalıştırın. Site değişikliklerine karşı indirme
+motorunu ve yardımcı bileşenleri günceller. Güncelleme internet gerektirir.
+İlk kurulumda GitHub ve PyPI erişimi gereklidir; işyeri ağı engellerse kurulum
+hata metnini gösterir. Başarısız kurulumdan sonra aynı işlemi yeniden deneyebilirsiniz.
+Bot doğrulaması, giriş gerektiren/özel/silinmiş içerik, ülke veya ağ engelleri
+indirmeyi engelleyebilir. Bu sürüm hesap çerezi almaz, DRM veya erişim engeli aşmaz.
+Hata durumunda pencerenin altındaki motor mesajını paylaşabilirsiniz; özel bağlantı
+ve tanımlayıcıları paylaşmadan önce çıkarın. Yalnız indirme hakkınız olan içeriği kullanın.
+
+BİLEŞENLER
+Arayüz: Python / Tkinter. Kaynak kodu app.py içindedir.
+İndirme: yt-dlp[default] — https://github.com/yt-dlp/yt-dlp (Unlicense)
+Medya: imageio-ffmpeg — https://github.com/imageio/imageio-ffmpeg (BSD-2-Clause),
+beraberindeki FFmpeg ikilisinin lisansı derleme seçeneklerine bağlıdır.
+FFmpeg: https://ffmpeg.org/legal.html
+YouTube JavaScript desteği: Deno — https://github.com/denoland/deno (MIT)
+Kurulum Deno dosyasını GitHub yayın özeti/checksum ile doğrular.
+Bileşenler sistem Python'una değil bu klasördeki .venv ve tools klasörüne indirilir.
+Bu ZIP üçüncü taraf çalıştırılabilir dosya içermez. Yeniden dağıtım yapacaksanız
+indirilen bileşenlerin lisans ve kaynak kod sağlama şartlarını ayrıca inceleyin.
+Ayarlar: %LOCALAPPDATA%\AZiLVideoIndirici\settings.json
+Kaldırma: uygulama klasörünü ve isterseniz yukarıdaki ayar klasörünü silin.
+İndirilen videolar ayrıca seçtiğiniz klasörde kalır.
+
+DOĞRULAMA
+Python sözdizimi, bağlantı doğrulaması, komut argümanları ve sahte motor ile kuyruk
+çalışanının başarılı/hatalı/iptal sonuçları geliştirme ortamında test edilmiştir.
+Gerçek Windows arayüzü, ilk kurulum ve canlı YouTube/X indirmesi burada test edilmedi.
+Bu paket bağımsız tek EXE değildir; BASLAT.bat ile açılan kaynak kodlu ilk sürümdür.
