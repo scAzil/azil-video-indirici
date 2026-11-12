@@ -34,7 +34,8 @@ jobs:
       - name: Build self-contained GUI EXE
         shell: pwsh
         run: |
-          python -m PyInstaller --noconfirm --clean --onefile --windowed --name "AZiL_Video_Indirici" --collect-all yt_dlp --collect-all imageio_ffmpeg --add-binary "vendor/deno.exe;tools" --distpath "dist" --workpath "build" --specpath "build" "source-v1/app.py"
+          $deno = (Resolve-Path "vendor/deno.exe").Path
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --name "AZiL_Video_Indirici" --collect-all yt_dlp --collect-all imageio_ffmpeg --add-binary "$deno;tools" --distpath "dist" --workpath "build" --specpath "build" "source-v1/app.py"
           if (-not (Test-Path "dist/AZiL_Video_Indirici.exe")) { throw "EXE not produced" }
       - name: Verify bundled runtimes and downloader worker
         shell: pwsh
