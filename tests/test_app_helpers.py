@@ -42,18 +42,15 @@ class VideoDownloaderTests(unittest.TestCase):
         self.assertIsNone(app.parse_progress_percent('waiting for download'))
 
     def test_phone_mode_uses_same_proven_download_as_normal(self):
+        url = 'https://www.youtube.com/shorts/test'
         for quality in ('1080p', '720p', 'En iyi'):
-            args = app.command('https://www.youtube.com/shorts/test', '/tmp', quality, False,
-                               'ffmpeg', 'deno', status_mode=True)
-            ordinary = app.command('https://www.youtube.com/shorts/test', '/tmp', quality, False,
-                                   'ffmpeg', 'deno')
+            args = app.command(url, '/tmp', quality, False, 'ffmpeg', 'deno',
+                               status_mode=True)
+            ordinary = app.command(url, '/tmp', quality, False, 'ffmpeg', 'deno')
             self.assertEqual(args, ordinary)
             self.assertIn('-f', args)
-        self.assertIn('height<=1080', app.command('https://www.youtube.com/shorts/test',
-                '/tmp', '1080p', False, 'ffmpeg', 'deno')[19] if False else
-                app.command('https://www.youtube.com/shorts/test', '/tmp', '1080p', False,
-                            'ffmpeg', 'deno')[app.command('https://www.youtube.com/shorts/test',
-                            '/tmp', '1080p', False, 'ffmpeg', 'deno').index('-f') + 1])
+        args = app.command(url, '/tmp', '1080p', False, 'ffmpeg', 'deno')
+        self.assertIn('height<=1080', args[args.index('-f') + 1])
 
     def test_url_validation(self):
         self.assertEqual(app.validate_url(' https://youtube.com/shorts/abc '),
