@@ -19,6 +19,54 @@ RESOURCES = Path(getattr(sys, '_MEIPASS', BASE))
 STATE = Path(os.getenv('LOCALAPPDATA', str(Path.home()))) / 'AZiLVideoIndirici'
 QUALITIES = {'En iyi': None, '2160p / 4K': 2160, '1440p': 1440, '1080p': 1080, '720p': 720, '480p': 480}
 FLAGS = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+STATUS_WIDTH = 1080
+STATUS_HEIGHT = 1920
+
+
+def status_output_path(source):
+    """Keep the original video and create a distinct MP4 for phone status."""
+    source = Path(source)
+    target = source.with_name(source.stem + ' - Durum 9x16.mp4')
+    index = 2
+    while target.exists():
+        target = source.with_name(f'{source.stem} - Durum 9x16 ({index}).mp4')
+        index += 1
+    return target
+
+
+def status_ffmpeg_args(ffmpeg, source, target):
+    """Crop to fill a real 9:16 frame: MP4 / H.264 / AAC / 30 fps."""
+    return [
+        str(ffmpeg), '-hide_banner', '-nostdin', '-y', '-i', str(source),
+        '-map', '0:v:0', '-map', '0:a:0?', '-sn', '-dn',
+        '-vf', (f'scale={STATUS_WIDTH}:{STATUS_HEIGHT}:'
+                'force_original_aspect_ratio=increase:flags=lanczos,'
+                f'crop={STATUS_WIDTH}:{STATUS_HEIGHT},setsar=1,fps=30'),
+        '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22',
+        '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '160k',
+        '-movflags', '+faststart', '-progress', 'pipe:1', '-nostats',
+        str(target),
+    ]
+
+
+def parse_hms(value):
+    """FFmpeg time field to seconds."""
+    parts = str(value).strip().split(':')
+    if len(parts) != 3:
+        return None
+    try:
+        hours, minutes, seconds = map(float, parts)
+        return hours * 3600 + minutes * 60 + seconds
+    except ValueError:
+        return None
+
+
+def parse_progress_percent(text):
+    match = re.search(r'(\d+(?:[.,]\d+)?)%', text)
+    if match:
+        return max(0.0, min(100.0, float(match.group(1).replace(',', '.'))))
+    return None
+
 
 
 def validate_url(value):
@@ -77,6 +125,8 @@ class App:
         self.folder = tk.StringVar(value=saved.get('folder', str(Path.home() / 'Downloads' / 'AZiL')))
         self.quality = tk.StringVar(value='1080p')
         self.audio = tk.BooleanVar(value=False)
+        self.status_mode = tk.BooleanVar(value=False)
+        self.progress_text = tk.StringVar(value='0%')
         self.status = tk.StringVar(value='Hazır • Bağlantıyı yapıştırın ve kuyruğa ekleyin.')
         root.title('AZiL • Video İndirici 1.0')
         root.geometry('980x740')
@@ -103,7 +153,10 @@ class App:
         bar.pack(fill='x')
         ttk.Button(bar, text='Panodan yapıştır', command=self.paste).pack(side='left')
         ttk.Button(bar, text='Kuyruğa ekle', command=self.add).pack(side='left', padx=8)
-        ttk.Checkbutton(bar, text='Yalnızca ses (MP3)', variable=self.audio).pack(side='right')
+        ttk.Checkbutton(bar, text='Yalnızca ses (MP3)', variable=self.audio,
+                        command=self.toggle_audio).pack(side='right')
+        ttk.Checkbutton(bar, text='Telefon Durumu (9:16 MP4)', variable=self.status_mode,
+                        command=self.toggle_status_mode).pack(side='right', padx=(10, 12))
         ttk.Combobox(bar, textvariable=self.quality, values=list(QUALITIES), state='readonly', width=14).pack(side='right', padx=8)
         pathbar = ttk.Frame(outer)
         pathbar.pack(fill='x', pady=14)
@@ -113,8 +166,9 @@ class App:
         ttk.Button(pathbar, text='Klasörü aç', command=self.open_folder).pack(side='left', padx=(8, 0))
         table = ttk.Frame(outer)
         table.pack(fill='both', expand=True)
-        self.tree = ttk.Treeview(table, columns=('url', 'mode', 'status'), show='headings', selectmode='extended', height=7)
-        for key, label, width in [('url', 'Bağlantı / Dosya', 430), ('mode', 'Seçim', 110), ('status', 'Durum', 170)]:
+        self.tree = ttk.Treeview(table, columns=('url', 'mode', 'percent', 'status'), show='headings', selectmode='extended', height=7)
+        for key, label, width in [('url', 'Bağlantı / Dosya', 365), ('mode', 'Seçim', 120),
+                                  ('percent', '%', 65), ('status', 'Durum', 150)]:
             self.tree.heading(key, text=label)
             self.tree.column(key, width=width, minwidth=70)
         self.tree.pack(side='left', fill='both', expand=True)
@@ -129,14 +183,26 @@ class App:
         ttk.Button(buttons, text='Durdur', command=self.stop).pack(side='left', padx=8)
         ttk.Button(buttons, text='Seçileni kaldır', command=self.remove).pack(side='left')
         ttk.Button(buttons, text='Hatalıları yeniden sıraya al', command=self.retry).pack(side='right')
-        self.progress = ttk.Progressbar(outer, maximum=100)
-        self.progress.pack(fill='x')
+        progress_row = ttk.Frame(outer)
+        progress_row.pack(fill='x', pady=(3, 0))
+        self.progress = ttk.Progressbar(progress_row, maximum=100)
+        self.progress.pack(side='left', fill='x', expand=True)
+        ttk.Label(progress_row, textvariable=self.progress_text,
+                  font=('Segoe UI', 14, 'bold'), width=8, anchor='e').pack(side='right', padx=(8, 0))
         ttk.Label(outer, textvariable=self.status, wraplength=850).pack(anchor='w', pady=8)
         self.log = tk.Text(outer, height=5, bg='#101823', fg='#aac0d6', font=('Consolas', 9), relief='flat', state='disabled')
         self.log.pack(fill='x')
-        ttk.Label(outer, text='Kalite seçimi üst sınırdır. Video MKV veya kaynağın biçiminde; ses MP3 olarak kaydedilir.', foreground='#aac0d6', font=('Segoe UI', 9)).pack(anchor='w', pady=(8, 0))
+        ttk.Label(outer, text='İndirme yüzdesi mevcut parça içindir. Durum: 9:16 kırpılmış MP4 (H.264/AAC); orijinal video korunur.', foreground='#aac0d6', font=('Segoe UI', 9)).pack(anchor='w', pady=(8, 0))
         root.protocol('WM_DELETE_WINDOW', self.close)
         root.after(100, self.poll)
+
+    def toggle_audio(self):
+        if self.audio.get():
+            self.status_mode.set(False)
+
+    def toggle_status_mode(self):
+        if self.status_mode.get():
+            self.audio.set(False)
 
     def paste(self):
         try:
@@ -159,12 +225,22 @@ class App:
         except ValueError as exc:
             messagebox.showerror('Bağlantı', str(exc))
             return
+        existing = {job['url'] for job in self.jobs.values()}
+        added = 0
+        skipped = 0
         for url in links:
-            mode = 'MP3' if self.audio.get() else self.quality.get()
-            iid = self.tree.insert('', 'end', values=(url, mode, 'Bekliyor'))
-            self.jobs[iid] = dict(url=url, quality=self.quality.get(), audio=self.audio.get(), state='Bekliyor', file=None)
+            if url in existing:
+                skipped += 1
+                continue
+            existing.add(url)
+            is_status = bool(self.status_mode.get() and not self.audio.get())
+            mode = 'MP3' if self.audio.get() else ('Durum 9:16' if is_status else self.quality.get())
+            iid = self.tree.insert('', 'end', values=(url, mode, '0%', 'Bekliyor'))
+            self.jobs[iid] = dict(url=url, quality=self.quality.get(), audio=self.audio.get(),
+                                  status_mode=is_status, state='Bekliyor', file=None)
+            added += 1
         self.urls.delete('1.0', 'end')
-        self.status.set(f'{len(links)} bağlantı eklendi. Ayarlar ekleme anında kaydedildi.')
+        self.status.set(f'{added} bağlantı eklendi.' + (f' {skipped} tekrar atlandı.' if skipped else ''))
 
     def open_folder(self):
         try:
@@ -185,7 +261,7 @@ class App:
 
     def remove(self):
         for iid in self.tree.selection():
-            if self.jobs[iid]['state'] != 'İndiriliyor':
+            if self.jobs[iid]['state'] not in ('İndiriliyor', 'Dönüştürülüyor'):
                 self.jobs.pop(iid)
                 self.tree.delete(iid)
 
@@ -194,6 +270,7 @@ class App:
             if job['state'] in ('Hata', 'Durduruldu'):
                 job['state'] = 'Bekliyor'
                 self.tree.set(iid, 'status', 'Bekliyor')
+                self.tree.set(iid, 'percent', '0%')
 
     def start(self):
         if self.busy:
@@ -227,6 +304,8 @@ class App:
                     job['state'] = 'İndiriliyor'
                     self.tree.set(iid, 'status', 'İndiriliyor')
                     self.progress['value'] = 0
+                    self.progress_text.set('0%')
+                    self.tree.set(iid, 'percent', '0%')
                     self.status.set('Bağlantı çözümleniyor…')
                     threading.Thread(target=self.worker, args=(iid, dict(job)), daemon=True).start()
                     return
@@ -238,23 +317,71 @@ class App:
 
     def worker(self, iid, job):
         code = 1
+        downloaded = None
+        output = None
         try:
             args = command(job['url'], self.active_folder, job['quality'], job['audio'], self.ffmpeg, self.deno)
             with self.lock:
                 if self.cancel_event.is_set():
                     self.events.put(('done', iid, 'Durduruldu'))
                     return
-                self.proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace', creationflags=FLAGS)
+                self.proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                                             encoding='utf-8', errors='replace', creationflags=FLAGS)
                 proc = self.proc
             for line in proc.stdout:
-                self.events.put(('line', iid, line.rstrip()))
+                line = line.rstrip()
+                if line.startswith('AZIL_FILE:'):
+                    downloaded = Path(line[len('AZIL_FILE:'):])
+                self.events.put(('line', iid, line))
             proc.stdout.close()
             code = proc.wait()
+            if code == 0 and job.get('status_mode') and not self.cancel_event.is_set():
+                if not downloaded or not downloaded.is_file():
+                    raise RuntimeError('İndirilen kaynak video bulunamadı; 9:16 dönüştürme yapılamadı.')
+                output = status_output_path(downloaded)
+                self.events.put(('convert_start', iid, 'Durum videosu hazırlanıyor…'))
+                convert_args = status_ffmpeg_args(self.ffmpeg, downloaded, output)
+                with self.lock:
+                    if self.cancel_event.is_set():
+                        self.events.put(('done', iid, 'Durduruldu'))
+                        return
+                    self.proc = subprocess.Popen(convert_args, stdout=subprocess.PIPE,
+                                                 stderr=subprocess.STDOUT, text=True,
+                                                 encoding='utf-8', errors='replace', creationflags=FLAGS)
+                    transcode = self.proc
+                duration = None
+                for line in transcode.stdout:
+                    line = line.rstrip()
+                    if 'Duration:' in line:
+                        match = re.search(r'Duration:\s*(\d+:\d+:\d+(?:\.\d+)?)', line)
+                        if match:
+                            duration = parse_hms(match.group(1))
+                    if line.startswith('out_time=') and duration:
+                        position = parse_hms(line.split('=', 1)[1])
+                        if position is not None:
+                            percent = min(99.0, max(0.0, 100 * position / duration))
+                            self.events.put(('convert_progress', iid, percent))
+                    elif 'Error' in line or 'error' in line:
+                        self.events.put(('line', iid, line))
+                transcode.stdout.close()
+                code = transcode.wait()
+                if code == 0 and output.is_file() and output.stat().st_size:
+                    self.events.put(('line', iid, 'AZIL_FILE:' + str(output)))
+                    self.events.put(('convert_progress', iid, 100.0))
+                else:
+                    code = 1
+                    self.events.put(('line', iid, 'Hata: 9:16 MP4 dönüştürme tamamlanamadı; orijinal video korundu.'))
         except Exception as exc:
+            code = 1
             self.events.put(('line', iid, 'Hata: ' + str(exc)))
         finally:
             with self.lock:
                 self.proc = None
+            if output and output.exists() and code != 0:
+                try:
+                    output.unlink()  # Only incomplete derived MP4; original remains intact.
+                except OSError:
+                    pass
         self.events.put(('done', iid, 'Durduruldu' if self.cancel_event.is_set() else ('Tamamlandı' if code == 0 else 'Hata')))
 
     def stop(self):
@@ -283,17 +410,33 @@ class App:
                     self.tree.set(iid, 'status', value)
                     if value == 'Tamamlandı':
                         self.progress['value'] = 100
+                        self.progress_text.set('100%')
+                        self.tree.set(iid, 'percent', '100%')
                     self.root.after(50, self.next_job)
+                elif kind == 'convert_start':
+                    self.jobs[iid]['state'] = 'Dönüştürülüyor'
+                    self.tree.set(iid, 'status', 'Dönüştürülüyor')
+                    self.tree.set(iid, 'percent', '0%')
+                    self.progress['value'] = 0
+                    self.progress_text.set('0%')
+                    self.status.set(value)
+                elif kind == 'convert_progress':
+                    self.progress['value'] = value
+                    self.progress_text.set(f'{value:.0f}%')
+                    self.tree.set(iid, 'percent', f'{value:.0f}%')
+                    self.status.set(f'Telefon Durumu 9:16 MP4 hazırlanıyor: %{value:.0f}')
                 elif value.startswith('AZIL_FILE:'):
                     path = value[len('AZIL_FILE:'):]
                     self.jobs[iid]['file'] = path
                     self.tree.set(iid, 'url', Path(path).name)
                 elif value.startswith('AZIL_PROGRESS:'):
                     progress = value[len('AZIL_PROGRESS:'):].strip()
-                    match = re.search(r'(\d+(?:\.\d+)?)%', progress)
-                    if match:
-                        self.progress['value'] = float(match.group(1))
-                    self.status.set(progress)
+                    percent = parse_progress_percent(progress)
+                    if percent is not None:
+                        self.progress['value'] = percent
+                        self.progress_text.set(f'{percent:.1f}%')
+                        self.tree.set(iid, 'percent', f'{percent:.1f}%')
+                    self.status.set('İndirilen parça: ' + progress)
                 else:
                     self.log.configure(state='normal')
                     self.log.insert('end', value + '\n')
