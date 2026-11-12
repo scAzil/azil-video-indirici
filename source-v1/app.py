@@ -11,7 +11,11 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from urllib.parse import urlsplit
 
-BASE = Path(__file__).resolve().parent
+# Frozen one-file executables unpack resources to sys._MEIPASS.
+# User files and settings must not be stored inside the temporary bundle.
+FROZEN = bool(getattr(sys, 'frozen', False))
+BASE = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resolve().parent
+RESOURCES = Path(getattr(sys, '_MEIPASS', BASE))
 STATE = Path(os.getenv('LOCALAPPDATA', str(Path.home()))) / 'AZiLVideoIndirici'
 QUALITIES = {'En iyi': None, '2160p / 4K': 2160, '1440p': 1440, '1080p': 1080, '720p': 720, '480p': 480}
 FLAGS = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
@@ -35,7 +39,10 @@ def validate_url(value):
 
 
 def command(url, folder, quality, audio, ffmpeg, deno):
-    args = [sys.executable, '-m', 'yt_dlp', '--ignore-config', '--no-playlist',
+    # A PyInstaller EXE cannot run 'python -m yt_dlp'. Re-enter this EXE
+    # in a CLI-only worker mode, keeping its GUI separate from the downloader.
+    runner = [sys.executable, '--azil-worker'] if FROZEN else [sys.executable, '-m', 'yt_dlp']
+    args = runner + ['--ignore-config', '--no-playlist',
             '--no-colors', '--newline', '--windows-filenames', '--no-overwrites',
             '--socket-timeout', '25', '--retries', '3', '--fragment-retries', '3',
             '--ffmpeg-location', str(ffmpeg), '--js-runtimes', 'deno:' + str(deno),
@@ -194,8 +201,12 @@ class App:
         try:
             import imageio_ffmpeg
             self.ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
-            self.deno = BASE / 'tools' / 'deno.exe'
+            # In a one-file EXE Deno is bundled into its extracted resources.
+            # In the original Python/BAT distribution it lives beside app.py.
+            self.deno = RESOURCES / 'tools' / 'deno.exe'
             if not self.deno.is_file():
+                if FROZEN:
+                    raise RuntimeError('Deno EXE paketinde bulunamadı; yeni sürümü indirin.')
                 raise RuntimeError('Deno eksik. GUNCELLE.bat dosyasını çalıştırın.')
             folder = Path(self.folder.get()).expanduser().resolve()
             folder.mkdir(parents=True, exist_ok=True)
@@ -304,7 +315,45 @@ class App:
             self.root.destroy()
 
 
+def self_test(report):
+    """Headless CI check that bundled runtime components exist and run."""
+    result = {'frozen': FROZEN, 'runtime_dir': str(RESOURCES)}
+    try:
+        import yt_dlp
+        import imageio_ffmpeg
+        ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+        deno = RESOURCES / 'tools' / 'deno.exe'
+        if not Path(ffmpeg).is_file():
+            raise RuntimeError('FFmpeg not found: ' + str(ffmpeg))
+        if not deno.is_file():
+            raise RuntimeError('Deno not found: ' + str(deno))
+        for name, program in (('deno', str(deno)), ('ffmpeg', str(ffmpeg))):
+            checked = subprocess.run([program, '-version' if name == 'ffmpeg' else '--version'],
+                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                     text=True, timeout=20, creationflags=FLAGS)
+            result[name] = checked.returncode
+            if checked.returncode != 0:
+                raise RuntimeError(name + ' failed: ' + checked.stdout[-1000:])
+        result['yt_dlp'] = yt_dlp.version.__version__
+        result['ok'] = True
+        code = 0
+    except Exception as exc:
+        result['ok'] = False
+        result['error'] = str(exc)
+        code = 1
+    Path(report).write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')
+    return code
+
+
 if __name__ == '__main__':
-    root = tk.Tk()
-    App(root)
-    root.mainloop()
+    if len(sys.argv) >= 2 and sys.argv[1] == '--azil-worker':
+        # Run yt-dlp CLI in this EXE, without opening a second GUI window.
+        from yt_dlp import main
+        sys.argv = ['yt-dlp'] + sys.argv[2:]
+        main()
+    elif len(sys.argv) == 3 and sys.argv[1] == '--azil-self-test':
+        sys.exit(self_test(sys.argv[2]))
+    else:
+        root = tk.Tk()
+        App(root)
+        root.mainloop()
