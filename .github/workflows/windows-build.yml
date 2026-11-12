@@ -22,7 +22,7 @@ jobs:
         shell: pwsh
         run: |
           python -m pip install --upgrade pip
-          python -m pip install pyinstaller yt-dlp requests pillow imageio-ffmpeg
+          python -m pip install pyinstaller 'yt-dlp[default]' requests pillow imageio-ffmpeg
           python -m py_compile source-v1/app.py
           python -m unittest discover -s tests -v
       - name: Download verified Deno runtime
@@ -36,7 +36,7 @@ jobs:
         shell: pwsh
         run: |
           $deno = (Resolve-Path "vendor/deno.exe").Path
-          python -m PyInstaller --noconfirm --clean --onefile --windowed --name "AZiL_Video_Indirici" --collect-all yt_dlp --collect-all imageio_ffmpeg --add-binary "$deno;tools" --distpath "dist" --workpath "build" --specpath "build" "source-v1/app.py"
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --name "AZiL_Video_Indirici" --collect-all yt_dlp --collect-all yt_dlp_ejs --copy-metadata yt-dlp-ejs --collect-all imageio_ffmpeg --add-binary "$deno;tools" --distpath "dist" --workpath "build" --specpath "build" "source-v1/app.py"
           if (-not (Test-Path "dist/AZiL_Video_Indirici.exe")) { throw "EXE not produced" }
       - name: Verify bundled runtimes and downloader worker
         shell: pwsh

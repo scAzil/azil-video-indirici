@@ -9,7 +9,7 @@ import sys
 import threading
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, parse_qs
 
 # Frozen one-file executables unpack resources to sys._MEIPASS.
 # User files and settings must not be stored inside the temporary bundle.
@@ -19,6 +19,53 @@ RESOURCES = Path(getattr(sys, '_MEIPASS', BASE))
 STATE = Path(os.getenv('LOCALAPPDATA', str(Path.home()))) / 'AZiLVideoIndirici'
 QUALITIES = {'En iyi': None, '2160p / 4K': 2160, '1440p': 1440, '1080p': 1080, '720p': 720, '480p': 480}
 FLAGS = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+
+def utf8_subprocess_env():
+    """Force UTF-8 for yt-dlp's redirected output on Turkish Windows."""
+    env = os.environ.copy()
+    env['PYTHONIOENCODING'] = 'utf-8:replace'
+    env['PYTHONUTF8'] = '1'
+    return env
+
+
+def recover_downloaded_file(value, folder, url=None):
+    """Find a completed file by its stable video ID if a log path is garbled."""
+    if value:
+        candidate = Path(value)
+        if candidate.is_file():
+            return candidate
+    identifier = None
+    for text in (value or '', url or ''):
+        ids = re.findall(r'\[([A-Za-z0-9_-]{8,24})\]', text)
+        if ids:
+            identifier = ids[-1]
+            break
+    if identifier is None and url:
+        parsed = urlsplit(url)
+        segments = parsed.path.strip('/').split('/')
+        if parsed.hostname in ('youtube.com', 'www.youtube.com', 'm.youtube.com'):
+            if segments[0] in ('shorts', 'live', 'embed') and len(segments) > 1:
+                identifier = segments[1]
+            elif segments[0] == 'watch':
+                identifier = parse_qs(parsed.query).get('v', [None])[0]
+        elif parsed.hostname == 'youtu.be' and segments:
+            identifier = segments[0]
+        elif len(segments) >= 3 and segments[-2] == 'status':
+            identifier = segments[-1]
+    if not identifier or not re.fullmatch(r'[A-Za-z0-9_-]{8,24}', identifier):
+        return None
+    root = Path(folder)
+    if not root.is_dir():
+        return None
+    allowed = {'.mp4', '.mkv', '.webm', '.mov', '.avi', '.m4v', '.flv'}
+    found = [
+        item for item in root.iterdir()
+        if item.is_file() and item.suffix.lower() in allowed
+        and f'[{identifier}]' in item.name
+        and ' - Durum 9x16' not in item.stem
+    ]
+    return max(found, key=lambda p: p.stat().st_mtime) if found else None
+
 STATUS_WIDTH = 1080
 STATUS_HEIGHT = 1920
 
@@ -91,6 +138,7 @@ def command(url, folder, quality, audio, ffmpeg, deno, status_mode=False):
     # in a CLI-only worker mode, keeping its GUI separate from the downloader.
     runner = [sys.executable, '--azil-worker'] if FROZEN else [sys.executable, '-m', 'yt_dlp']
     args = runner + ['--ignore-config', '--no-playlist',
+            '--encoding', 'utf-8', '--remote-components', 'ejs:github',
             '--no-colors', '--newline', '--windows-filenames', '--no-overwrites',
             '--socket-timeout', '25', '--retries', '3', '--fragment-retries', '3',
             '--ffmpeg-location', str(ffmpeg), '--js-runtimes', 'deno:' + str(deno),
@@ -371,7 +419,8 @@ class App:
                         self.events.put(('done', iid, 'Durduruldu'))
                         return
                     self.proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                                                 encoding='utf-8', errors='replace', creationflags=FLAGS)
+                                                 encoding='utf-8', errors='replace', env=utf8_subprocess_env(),
+                                                 creationflags=FLAGS)
                     proc = self.proc
                 for line in proc.stdout:
                     line = line.rstrip()
@@ -385,6 +434,11 @@ class App:
                 proc.stdout.close()
                 code = proc.wait()
             if code == 0 and job.get('status_mode') and not self.cancel_event.is_set():
+                recovered = recover_downloaded_file(str(downloaded) if downloaded else None,
+                                                   self.active_folder, job.get('url'))
+                if recovered is not None and recovered != downloaded:
+                    self.events.put(('line', iid, 'Dosya yolu doğrulandı: ' + str(recovered)))
+                downloaded = recovered
                 if not downloaded or not downloaded.is_file():
                     raise RuntimeError('İndirilen kaynak video bulunamadı; 9:16 dönüştürme yapılamadı.')
                 output = status_output_path(downloaded)
@@ -541,6 +595,17 @@ def self_test(report):
             if checked.returncode != 0:
                 raise RuntimeError(name + ' failed: ' + checked.stdout[-1000:])
         result['yt_dlp'] = yt_dlp.version.__version__
+        from importlib.metadata import version
+        result['yt_dlp_ejs'] = version('yt-dlp-ejs')
+        # Verify that a frozen worker can emit Turkish paths in UTF-8.
+        child = subprocess.run([sys.executable, '--azil-path-test'],
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                               text=True, encoding='utf-8', errors='strict',
+                               env=utf8_subprocess_env(), timeout=30, creationflags=FLAGS)
+        expected = 'AZIL_FILE:C:\\örnek\\satın aldığım koltuğa başkası oturdu [BdSgGtHHFNw].mkv'
+        if child.returncode != 0 or child.stdout.strip() != expected:
+            raise RuntimeError('UTF-8 pipe test failed: ' + repr(child.stdout))
+        result['turkish_filename_pipe'] = 'UTF-8 OK'
         # Exercise the real phone-status transcoding path without a network video.
         import tempfile
         with tempfile.TemporaryDirectory() as temporary:
@@ -576,7 +641,9 @@ def self_test(report):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) >= 2 and sys.argv[1] == '--azil-worker':
+    if len(sys.argv) == 2 and sys.argv[1] == '--azil-path-test':
+        print('AZIL_FILE:C:\\örnek\\satın aldığım koltuğa başkası oturdu [BdSgGtHHFNw].mkv', flush=True)
+    elif len(sys.argv) >= 2 and sys.argv[1] == '--azil-worker':
         # Run yt-dlp CLI in this EXE, without opening a second GUI window.
         from yt_dlp import main
         sys.argv = ['yt-dlp'] + sys.argv[2:]

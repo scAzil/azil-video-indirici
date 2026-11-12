@@ -35,6 +35,24 @@ class VideoDownloaderTests(unittest.TestCase):
             self.assertEqual(source.read_bytes(), b'original')
             self.assertEqual(first.read_bytes(), b'other')
 
+    def test_turkish_filename_recovery(self):
+        with tempfile.TemporaryDirectory() as folder:
+            real = Path(folder) / 'satın aldığım koltuğa başkası oturdu [BdSgGtHHFNw].mkv'
+            real.write_bytes(b'video')
+            mojibake = str(Path(folder) / 'sat�n ald���m koltu�a ba�kas� oturdu [BdSgGtHHFNw].mkv')
+            resolved = app.recover_downloaded_file(
+                mojibake, folder, 'https://www.youtube.com/shorts/BdSgGtHHFNw')
+            self.assertEqual(resolved, real)
+            self.assertEqual(app.recover_downloaded_file(str(real), folder), real)
+            self.assertIsNone(app.recover_downloaded_file(None, folder, 'https://youtu.be/fail12345'))
+            self.assertEqual(app.utf8_subprocess_env()['PYTHONIOENCODING'], 'utf-8:replace')
+
+    def test_ejs_and_utf8_flags(self):
+        args = app.command('https://www.youtube.com/shorts/BdSgGtHHFNw',
+                           '/tmp', '1080p', False, 'ffmpeg', 'deno', status_mode=True)
+        self.assertEqual(args[args.index('--remote-components') + 1], 'ejs:github')
+        self.assertEqual(args[args.index('--encoding') + 1], 'utf-8')
+
     def test_progress_parsing(self):
         self.assertAlmostEqual(app.parse_progress_percent('12.3% | 1.2MiB/s'), 12.3)
         self.assertAlmostEqual(app.parse_progress_percent('99,9%'), 99.9)

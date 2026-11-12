@@ -19,6 +19,8 @@ Windows EXE aday sürümü GitHub **Actions** sayfasında `Build Windows x64 (ca
 - **Aynı, denenmiş indirme yöntemi:** Telefon Durumu modu da normal moddaki aynı yt-dlp kalite seçimini kullanır. Farklı filtreler yüzünden indirme hatası yaşanmasın diye yalnızca indirme tamamlandıktan sonra MP4 dönüşümü yapılır.
 - **Dosyadan 9:16 MP4:** Bilgisayarda zaten bulunan MP4/MKV/WebM gibi videolar, yeniden indirilmeden `Dosyadan 9:16 MP4` düğmesinden kuyruğa alınır. `İndirmeyi başlat` işlemi yerel dönüşümü çalıştırır.
 - **Hata raporu:** `Son hata ayrıntısını kopyala` düğmesi başarısız indirme veya dönüşümün son çıktı satırlarını panoya kopyalar. Paylaşmadan önce adres veya kişisel bilgi içerip içermediğini kontrol edin.
+- **Türkçe dosya adları:** Windows UTF-8 kodlaması zorlanır; bozulmuş çıktı satırlarında video kimliğinden güvenli yol kurtarma uygulanır.
+- **YouTube EJS:** EXE içinde resmi yt-dlp-ejs ve Deno bulunur; gerekirse yt-dlp resmi GitHub kaynağından ek EJS bileşenlerini indirebilir.
 - **Kaynak video korunur:** İndirilen özgün dosya asla dönüşüm sırasında silinmez. Yalnızca başarısız dönüşümün yarım kalan çıktısı temizlenir.
 - **Kuyruk kontrolü:** Aynı URL ikinci kez eklenmez. Başarısız işler yeniden sıraya alınabilir.
 - **Kırpma davranışı:** Tam 9:16 çerçeveyi doldurmak için merkezden kırpar; 9:16 olmayan görüntülerin üst/alt veya sağ/sol bölümleri kesilebilir. Videonun kendi içine işlenmiş siyah kenarlar otomatik algılanmaz.
