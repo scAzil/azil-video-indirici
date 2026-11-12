@@ -1,0 +1,76 @@
+name: Build Windows x64 (candidate)
+
+on:
+  push:
+    branches: [build/windows-v1-release-prep]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-build:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          architecture: x64
+      - name: Install build dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyinstaller 'yt-dlp[default]' requests pillow imageio-ffmpeg
+          python -m py_compile source-v1/app.py
+          python -m unittest discover -s tests -v
+      - name: Download verified Deno runtime
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python .github/scripts/download_deno.py
+          if (-not (Test-Path 'vendor/deno.exe')) { throw 'Deno missing' }
+      - name: Build self-contained GUI EXE
+        shell: pwsh
+        run: |
+          $deno = (Resolve-Path "vendor/deno.exe").Path
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --name "AZiL_Video_Indirici" --collect-all yt_dlp --collect-all yt_dlp_ejs --copy-metadata yt-dlp-ejs --collect-all imageio_ffmpeg --add-binary "$deno;tools" --distpath "dist" --workpath "build" --specpath "build" "source-v1/app.py"
+          if (-not (Test-Path "dist/AZiL_Video_Indirici.exe")) { throw "EXE not produced" }
+      - name: Verify bundled runtimes and downloader worker
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path "dist/AZiL_Video_Indirici.exe").Path
+          $report = Join-Path (Get-Location).Path "runtime-selftest.json"
+          $test = Start-Process -FilePath $exe -ArgumentList @("--azil-self-test", $report) -PassThru -Wait
+          if (-not (Test-Path $report)) { throw "EXE self-test did not write a report; exit $($test.ExitCode)" }
+          Get-Content $report
+          $data = Get-Content $report -Raw | ConvertFrom-Json
+          if ($test.ExitCode -ne 0 -or -not $data.ok) { throw "EXE bundled-runtime self-test failed" }
+          $worker = Start-Process -FilePath $exe -ArgumentList @("--azil-worker", "--version") -PassThru -Wait
+          if ($worker.ExitCode -ne 0) { throw "EXE yt-dlp worker failed with exit code $($worker.ExitCode)" }
+      - name: Create portable ZIP and checksums
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "portable" | Out-Null
+          Copy-Item "dist/AZiL_Video_Indirici.exe" "portable/"
+          @'
+          AZiL Video Indirici v1.0.0 Windows x64 RELEASE CANDIDATE
+          Run AZiL_Video_Indirici.exe. Deno and FFmpeg are embedded.
+          Windows SmartScreen warnings should be evaluated before allowing the app.
+          Only download content you are authorized to download.
+          Confirm GUI startup, quality/audio options and download operation before release.
+          '@ | Set-Content "portable/README.txt" -Encoding UTF8
+          Compress-Archive -Path "portable/*" -DestinationPath "AZiL_Video_Indirici_v1.0.0_Windows_x64.zip" -Force
+          Get-FileHash "dist/AZiL_Video_Indirici.exe", "AZiL_Video_Indirici_v1.0.0_Windows_x64.zip" -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  $(Split-Path $_.Path -Leaf)" } | Set-Content SHA256SUMS.txt
+      - name: Upload validated candidate binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: AZiL-Video-Indirici-Windows-x64-candidate
+          path: |
+            dist/AZiL_Video_Indirici.exe
+            AZiL_Video_Indirici_v1.0.0_Windows_x64.zip
+            SHA256SUMS.txt
+            runtime-selftest.json
+          if-no-files-found: error
