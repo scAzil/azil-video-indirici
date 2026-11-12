@@ -120,6 +120,7 @@ class App:
         self.proc = None
         self.lock = threading.Lock()
         self.closing = False
+        self.last_error = ''
         STATE.mkdir(parents=True, exist_ok=True)
         self.settings = STATE / 'settings.json'
         try:
@@ -186,6 +187,7 @@ class App:
         self.start_button.pack(side='left')
         ttk.Button(buttons, text='Durdur', command=self.stop).pack(side='left', padx=8)
         ttk.Button(buttons, text='Seçileni kaldır', command=self.remove).pack(side='left')
+        ttk.Button(buttons, text='Dosyadan 9:16 MP4', command=self.add_local_conversion).pack(side='left', padx=8)
         ttk.Button(buttons, text='Hatalıları yeniden sıraya al', command=self.retry).pack(side='right')
         progress_row = ttk.Frame(outer)
         progress_row.pack(fill='x', pady=(3, 0))
@@ -196,6 +198,7 @@ class App:
         ttk.Label(outer, textvariable=self.status, wraplength=850).pack(anchor='w', pady=8)
         self.log = tk.Text(outer, height=5, bg='#101823', fg='#aac0d6', font=('Consolas', 9), relief='flat', state='disabled')
         self.log.pack(fill='x')
+        ttk.Button(outer, text='Son hata ayrıntısını kopyala', command=self.copy_last_error).pack(anchor='e', pady=(4, 0))
         ttk.Label(outer, text='İndirme yüzdesi mevcut parça içindir. Durum: 9:16 kırpılmış MP4 (H.264/AAC); orijinal video korunur.', foreground='#aac0d6', font=('Segoe UI', 9)).pack(anchor='w', pady=(8, 0))
         root.protocol('WM_DELETE_WINDOW', self.close)
         root.after(100, self.poll)
@@ -245,6 +248,32 @@ class App:
             added += 1
         self.urls.delete('1.0', 'end')
         self.status.set(f'{added} bağlantı eklendi.' + (f' {skipped} tekrar atlandı.' if skipped else ''))
+
+    def add_local_conversion(self):
+        """Convert a video already present on disk; no network download needed."""
+        chosen = filedialog.askopenfilename(
+            title='Telefon durumu için video seçin',
+            filetypes=[('Video dosyaları', '*.mp4 *.mkv *.webm *.mov *.avi *.m4v'),
+                       ('Tüm dosyalar', '*.*')])
+        if not chosen:
+            return
+        source = Path(chosen).resolve()
+        if not source.is_file():
+            messagebox.showerror('Dosya bulunamadı', str(source))
+            return
+        iid = self.tree.insert('', 'end', values=(source.name, 'Durum 9:16', '0%', 'Bekliyor'))
+        self.jobs[iid] = dict(url=None, source_file=str(source), quality='En iyi',
+                              audio=False, status_mode=True, state='Bekliyor', file=str(source))
+        self.status.set('Mevcut dosya kuyruğa eklendi. İndirmeyi başlat düğmesine basın.')
+
+    def copy_last_error(self):
+        if not self.last_error:
+            messagebox.showinfo('Hata kaydı', 'Henüz kaydedilmiş bir hata bulunmuyor.')
+            return
+        self.root.clipboard_clear()
+        self.root.clipboard_append(self.last_error)
+        self.root.update()
+        self.status.set('Son hata ayrıntısı panoya kopyalandı.')
 
     def open_folder(self):
         try:
