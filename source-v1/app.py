@@ -86,7 +86,7 @@ def validate_url(value):
     return value
 
 
-def command(url, folder, quality, audio, ffmpeg, deno):
+def command(url, folder, quality, audio, ffmpeg, deno, status_mode=False):
     # A PyInstaller EXE cannot run 'python -m yt_dlp'. Re-enter this EXE
     # in a CLI-only worker mode, keeping its GUI separate from the downloader.
     runner = [sys.executable, '--azil-worker'] if FROZEN else [sys.executable, '-m', 'yt_dlp']
@@ -100,9 +100,15 @@ def command(url, folder, quality, audio, ffmpeg, deno):
     if audio:
         args += ['-f', 'bestaudio/best', '-x', '--audio-format', 'mp3', '--audio-quality', '192K']
     else:
-        height = QUALITIES[quality]
-        limit = f'[height<={height}]' if height else ''
-        args += ['-f', f'bv*{limit}+ba/b{limit}', '--merge-output-format', 'mkv']
+        if status_mode:
+            # The 1080p portrait source is typically 1080x1920, not 1920x1080.
+            # Limit both dimensions rather than rejecting portrait by height.
+            selector = 'bv*[width<=1920][height<=1920]+ba/b[width<=1920][height<=1920]/bv*+ba/b'
+        else:
+            height = QUALITIES[quality]
+            limit = f'[height<={height}]' if height else ''
+            selector = f'bv*{limit}+ba/b{limit}'
+        args += ['-f', selector, '--merge-output-format', 'mkv']
     return args + ['--', url]
 
 
@@ -320,7 +326,7 @@ class App:
         downloaded = None
         output = None
         try:
-            args = command(job['url'], self.active_folder, job['quality'], job['audio'], self.ffmpeg, self.deno)
+            args = command(job['url'], self.active_folder, job['quality'], job['audio'], self.ffmpeg, self.deno, job.get('status_mode', False))
             with self.lock:
                 if self.cancel_event.is_set():
                     self.events.put(('done', iid, 'Durduruldu'))
