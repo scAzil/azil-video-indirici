@@ -1,0 +1,115 @@
+name: Publish AZiL v1.0.0 Windows
+
+# One-time release after merging this file into main.
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-v1.0.0.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download exact user-tested artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          RUN_ID=43321606545
+          SHA=5a5ef6ff7cca58c9b10004264f8b26ee06f40fc5
+          EXPECTED_ARTIFACT_ID=13990049375
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" --jq '.conclusion')" = success
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" --jq '.head_sha')" = "$SHA"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts" --jq '.artifacts[] | select(.name == "AZiL-Video-Indirici-Windows-x64-candidate") | .id')" = "$EXPECTED_ARTIFACT_ID"
+          gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name AZiL-Video-Indirici-Windows-x64-candidate --dir _candidate
+      - name: Validate files, checksums and bundled self-test
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, json, shutil, zipfile
+          root = Path('_candidate')
+          target = Path('_release')
+          target.mkdir(exist_ok=True)
+          names = ['AZiL_Video_Indirici.exe', 'AZiL_Video_Indirici_v1.0.0_Windows_x64.zip', 'SHA256SUMS.txt', 'runtime-selftest.json']
+          found = {}
+          for name in names:
+              matches = list(root.rglob(name))
+              assert len(matches) == 1, f'Missing/duplicate artifact: {name} ({len(matches)})'
+              found[name] = matches[0]
+          report = json.loads(found['runtime-selftest.json'].read_text(encoding='utf-8-sig'))
+          assert report.get('ok') is True
+          assert report.get('deno') == 0 and report.get('ffmpeg') == 0
+          assert report.get('yt_dlp_ejs')
+          assert report.get('status_export') == '1080x1920 H.264 MP4 OK'
+          checks = {}
+          for line in found['SHA256SUMS.txt'].read_text(encoding='utf-8-sig').splitlines():
+              parts = line.strip().split(None, 1)
+              if len(parts) == 2:
+                  checks[Path(parts[1].lstrip('*')).name] = parts[0].lower()
+          for name in names[:2]:
+              actual = hashlib.sha256(found[name].read_bytes()).hexdigest()
+              assert actual == checks.get(name), f'Checksum failed for {name}'
+          with zipfile.ZipFile(found[names[1]]) as archive:
+              exes = [x for x in archive.namelist() if Path(x).name == names[0]]
+              assert len(exes) == 1
+              assert hashlib.sha256(archive.read(exes[0])).hexdigest() == checks[names[0]]
+          for name in names[:3]:
+              shutil.copy2(found[name], target / name)
+          shutil.copy2('THIRD_PARTY_NOTICES.md', target / 'THIRD_PARTY_NOTICES.md')
+          (target / 'BUILD_PROVENANCE.txt').write_text(
+              'Tested run: https://github.com/scAzil/azil-video-indirici/actions/runs/43321606545\n'
+              'Tested commit: 5a5ef6ff7cca58c9b10004264f8b26ee06f40fc5\n'
+              'Artifact ID: 13990049375\n'
+              'Automated tests: 8 passed; Deno/FFmpeg/EJS/9:16 MP4 verified\n'
+              'EXE SHA256: ' + checks[names[0]] + '\n'
+              'ZIP SHA256: ' + checks[names[1]] + '\n', encoding='utf-8')
+          print('Verified identical EXE in executable and portable ZIP')
+          PY
+      - name: Publish GitHub Release v1.0.0
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ASSETS=(
+            _release/AZiL_Video_Indirici.exe
+            _release/AZiL_Video_Indirici_v1.0.0_Windows_x64.zip
+            _release/SHA256SUMS.txt
+            _release/THIRD_PARTY_NOTICES.md
+            _release/BUILD_PROVENANCE.txt
+          )
+          if gh release view v1.0.0 -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload v1.0.0 "${ASSETS[@]}" --clobber -R "$GITHUB_REPOSITORY"
+          else
+            gh release create v1.0.0 "${ASSETS[@]}" -R "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" --title "AZiL Video İndirici v1.0.0 — Windows x64" \
+              --notes-file RELEASE_NOTES.md --latest
+          fi
+      - name: Verify public release assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, subprocess
+          data = json.loads(subprocess.check_output(
+              ['gh', 'api', f'repos/{os.environ["GITHUB_REPOSITORY"]}/releases/tags/v1.0.0'],
+              text=True))
+          assert not data['draft'] and not data['prerelease']
+          assets = {asset['name']: asset['size'] for asset in data['assets']}
+          for filename in ['AZiL_Video_Indirici.exe', 'AZiL_Video_Indirici_v1.0.0_Windows_x64.zip', 'SHA256SUMS.txt', 'THIRD_PARTY_NOTICES.md', 'BUILD_PROVENANCE.txt']:
+              assert assets.get(filename, 0) > 0, f'Asset missing: {filename}'
+          print('Verified public GitHub Release:', data['html_url'])
+          PY
