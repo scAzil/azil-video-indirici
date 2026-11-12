@@ -100,14 +100,12 @@ def command(url, folder, quality, audio, ffmpeg, deno, status_mode=False):
     if audio:
         args += ['-f', 'bestaudio/best', '-x', '--audio-format', 'mp3', '--audio-quality', '192K']
     else:
-        if status_mode:
-            # The 1080p portrait source is typically 1080x1920, not 1920x1080.
-            # Limit both dimensions rather than rejecting portrait by height.
-            selector = 'bv*[width<=1920][height<=1920]+ba/b[width<=1920][height<=1920]/bv*+ba/b'
-        else:
-            height = QUALITIES[quality]
-            limit = f'[height<={height}]' if height else ''
-            selector = f'bv*{limit}+ba/b{limit}'
+        # Keep download selection *identical* for regular and phone-status jobs.
+        # The older custom width/height expression could reject available
+        # Shorts streams. Phone format conversion happens only AFTER download.
+        height = QUALITIES[quality]
+        limit = f'[height<={height}]' if height else ''
+        selector = f'bv*{limit}+ba/b{limit}'
         args += ['-f', selector, '--merge-output-format', 'mkv']
     return args + ['--', url]
 
